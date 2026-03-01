@@ -1,0 +1,89 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ── Physical constants ─────────────────────────────────────────────
+rho = 1000                # kg/m³  (water)
+g   = 9.81                # m/s²
+mu  = 1.0e-3              # Pa·s
+L   = 2845e-3             # tube length → m
+D   = 10e-3               # tube inner diameter → m
+
+# Tank geometry
+D_tank = 145e-3           # m
+A_tank = np.pi/4 * D_tank**2
+
+# Electrical input power
+U = 12                    # V
+I = 4.0                   # A
+P_total = U * I           # 48 W
+
+# ── Experimental data ─────────────────────────────────────────────
+data = {
+    40:  {'h_start': [5,4,5],   'h_end': [200,200,200], 't':[189.74,184.23,184.83]},
+    50:  {'h_start': [5,5,5],   'h_end': [200,200,200], 't':[135.35,134.94,135.44]},
+    60:  {'h_start': [5,5,4],   'h_end': [200,200,200], 't':[105.53,106.45,105.96]},
+    70:  {'h_start': [5,5,4],   'h_end': [200,200,200], 't':[85.76,85.91,85.58]},
+    80:  {'h_start': [5,5,5],   'h_end': [200,200,200], 't':[73.50,72.65,72.93]},
+    90:  {'h_start': [4,5,5],   'h_end': [200,200,200], 't':[62.51,62.59,62.85]},
+    100: {'h_start': [5,5,4],   'h_end': [200,200,200], 't':[53.91,54.06,54.50]},
+}
+
+powers = sorted(data.keys())
+
+Q_mean, Q_std = [], []
+eta_mean, eta_std = [], []
+
+# ── Calculations with error propagation ────────────────────────────
+for p in powers:
+    d = data[p]
+    Q_reps = []
+
+    for i in range(3):
+        dh = (d['h_end'][i] - d['h_start'][i]) * 1e-3  # m
+        Q = A_tank * dh / d['t'][i]                    # m³/s
+        Q_reps.append(Q)
+
+    Q_arr = np.array(Q_reps)
+    Q_avg = Q_arr.mean()
+    Q_mean.append(Q_avg)
+    Q_std.append(Q_arr.std(ddof=1))  # standard deviation of Q
+
+    # Mean height difference
+    dh_mean = np.mean([(d['h_end'][i] - d['h_start'][i]) for i in range(3)]) * 1e-3
+
+    # Hydraulic power for each repetition
+    P_actual_reps = rho * Q_arr * g * dh_mean + (512 * mu * L * Q_arr ** 2) / (np.pi * D ** 4)
+    P_input = P_total * (p / 100)
+    eta_reps = P_actual_reps / P_input * 100
+
+    eta_mean.append(np.mean(eta_reps))
+    eta_std.append(np.std(eta_reps, ddof=1))
+
+Q_mean = np.array(Q_mean) * 1e6     # mL/s
+Q_std  = np.array(Q_std)  * 1e6
+eta_mean = np.array(eta_mean)
+eta_std  = np.array(eta_std)
+
+# ── Plotting with visible error bars ────────────────────────────────
+fig, axes = plt.subplots(1, 2, figsize=(12,5))
+fig.subplots_adjust(wspace=0.35)
+
+# Flowrate plot
+axes[0].errorbar(powers, Q_mean, yerr=Q_std, fmt='o-',
+                 color='steelblue', capsize=6, markersize=6, linewidth=2, label='Flowrate ± SD')
+axes[0].set_xlabel("Pump power setting (%)")
+axes[0].set_ylabel("Flowrate Q (mL/s)")
+axes[0].set_title("Flowrate vs Pump Power")
+axes[0].grid(True)
+axes[0].legend()
+
+# Efficiency plot
+axes[1].errorbar(powers, eta_mean, yerr=eta_std, fmt='s--',
+                 color='darkorange', capsize=6, markersize=6, linewidth=2, label='Efficiency ± SD')
+axes[1].set_xlabel("Pump power setting (%)")
+axes[1].set_ylabel("Efficiency η (%)")
+axes[1].set_title("Pump Efficiency vs Pump Power")
+axes[1].grid(True)
+axes[1].legend()
+
+plt.show()
